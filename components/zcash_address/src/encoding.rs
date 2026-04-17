@@ -9,7 +9,7 @@ use std::error::Error;
 
 use bech32::{primitives::decode::CheckedHrpstring, Bech32, Bech32m, Checksum, Hrp};
 use zcash_protocol::consensus::{NetworkConstants, NetworkType};
-use zcash_protocol::constants::{mainnet, regtest, testnet};
+use zcash_protocol::constants::{mainnet, regtest, testnet, ycash_mainnet, ycash_testnet};
 
 use crate::kind::unified::Encoding;
 use crate::{kind::*, AddressKind, ZcashAddress};
@@ -79,6 +79,8 @@ impl FromStr for ZcashAddress {
                 mainnet::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Main,
                 testnet::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Test,
                 regtest::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Regtest,
+                ycash_mainnet::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::YcashMain,
+                ycash_testnet::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::YcashTest,
                 // We will not define new Bech32 address encodings.
                 _ => {
                     return Err(ParseError::NotZcash);
@@ -126,18 +128,37 @@ impl FromStr for ZcashAddress {
                     prefix @ (testnet::B58_PUBKEY_ADDRESS_PREFIX
                     | testnet::B58_SCRIPT_ADDRESS_PREFIX
                     | testnet::B58_SPROUT_ADDRESS_PREFIX) => (prefix, NetworkType::Test),
+                    prefix @ (ycash_mainnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | ycash_mainnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | ycash_mainnet::B58_SPROUT_ADDRESS_PREFIX) => {
+                        (prefix, NetworkType::YcashMain)
+                    }
+                    prefix @ (ycash_testnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | ycash_testnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | ycash_testnet::B58_SPROUT_ADDRESS_PREFIX) => {
+                        (prefix, NetworkType::YcashTest)
+                    }
                     // We will not define new Base58Check address encodings.
                     _ => return Err(ParseError::NotZcash),
                 };
 
                 return match prefix {
-                    mainnet::B58_SPROUT_ADDRESS_PREFIX | testnet::B58_SPROUT_ADDRESS_PREFIX => {
+                    mainnet::B58_SPROUT_ADDRESS_PREFIX
+                    | testnet::B58_SPROUT_ADDRESS_PREFIX
+                    | ycash_mainnet::B58_SPROUT_ADDRESS_PREFIX
+                    | ycash_testnet::B58_SPROUT_ADDRESS_PREFIX => {
                         decoded[2..].try_into().map(AddressKind::Sprout)
                     }
-                    mainnet::B58_PUBKEY_ADDRESS_PREFIX | testnet::B58_PUBKEY_ADDRESS_PREFIX => {
+                    mainnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | testnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | ycash_mainnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | ycash_testnet::B58_PUBKEY_ADDRESS_PREFIX => {
                         decoded[2..].try_into().map(AddressKind::P2pkh)
                     }
-                    mainnet::B58_SCRIPT_ADDRESS_PREFIX | testnet::B58_SCRIPT_ADDRESS_PREFIX => {
+                    mainnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | testnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | ycash_mainnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | ycash_testnet::B58_SCRIPT_ADDRESS_PREFIX => {
                         decoded[2..].try_into().map(AddressKind::P2sh)
                     }
                     _ => unreachable!(),
