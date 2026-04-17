@@ -17,7 +17,7 @@ use zcash_primitives::transaction::{
 use zcash_protocol::value::Zatoshis;
 use zcash_protocol::{
     consensus::BranchId,
-    constants::{V5_TX_VERSION, V5_VERSION_GROUP_ID},
+    constants::{V4_TX_VERSION, V4_VERSION_GROUP_ID, V5_TX_VERSION, V5_VERSION_GROUP_ID},
 };
 
 use crate::{Pczt, common::determine_lock_time};
@@ -87,6 +87,11 @@ impl<'a> TransactionExtractor<'a> {
 
         let version = match (pczt.global.tx_version, pczt.global.version_group_id) {
             (V5_TX_VERSION, V5_VERSION_GROUP_ID) => Ok(TxVersion::V5),
+            // v4 (Sapling) transactions: the polymorphic `signature_hash` below
+            // dispatches to `v4_signature_hash` based on this `TxVersion`. This works
+            // because `Unbound` carries the Groth16 proof bytes that ZIP-243 commits
+            // to.
+            (V4_TX_VERSION, V4_VERSION_GROUP_ID) => Ok(TxVersion::V4),
             (version, version_group_id) => Err(Error::Global(GlobalError::UnsupportedTxVersion {
                 version,
                 version_group_id,
@@ -145,7 +150,7 @@ impl<'a> TransactionExtractor<'a> {
             |_| unimplemented!("PCZT support for TZEs is not implemented."),
         )?;
 
-        let tx = tx_data.freeze().expect("v5 tx can't fail here");
+        let tx = tx_data.freeze().expect("v4/v5 tx can't fail here");
 
         // Now that we have a supposedly fully-authorized transaction, verify it.
         if let Some(bundle) = tx.sapling_bundle() {

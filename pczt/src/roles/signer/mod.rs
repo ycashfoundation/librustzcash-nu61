@@ -20,9 +20,10 @@ use rand_core::OsRng;
 use ::transparent::sighash::{SIGHASH_ANYONECANPAY, SIGHASH_NONE, SIGHASH_SINGLE};
 use zcash_primitives::transaction::{
     Authorization, TransactionData, TxDigests, TxVersion, sighash::SignableInput,
-    sighash_v5::v5_signature_hash, txid::TxIdDigester,
+    sighash_v4::v4_signature_hash, sighash_v5::v5_signature_hash, txid::TxIdDigester,
 };
 use zcash_protocol::consensus::BranchId;
+use zcash_protocol::constants::{V4_TX_VERSION, V4_VERSION_GROUP_ID};
 #[cfg(all(
     any(zcash_unstable = "nu7", zcash_unstable = "zfuture"),
     feature = "zip-233"
@@ -39,23 +40,59 @@ use crate::{
 
 use crate::common::determine_lock_time;
 
+use super::v4_sighash::{WithProofs, pczt_to_tx_data_v4};
+
 const V5_TX_VERSION: u32 = 5;
 const V5_VERSION_GROUP_ID: u32 = 0x26A7270A;
+
+/// The cached `TransactionData` and digests required to compute sighashes for a PCZT.
+///
+/// Dispatched on the PCZT's transaction version: v5 (NU5+) uses ZIP-244 and only needs
+/// transaction effects; v4 (Sapling) uses ZIP-243 which commits to the Sapling Groth16
+/// proof bytes, so it carries them through [`WithProofs`].
+pub(crate) enum CachedTx {
+    V5 {
+        tx_data: TransactionData<EffectsOnly>,
+        txid_parts: TxDigests<Blake2bHash>,
+    },
+    V4 {
+        tx_data: TransactionData<WithProofs>,
+    },
+}
+
+impl CachedTx {
+    pub(crate) fn sighash(&self, signable_input: &SignableInput<'_>) -> [u8; 32] {
+        let hash = match self {
+            Self::V5 {
+                tx_data,
+                txid_parts,
+            } => v5_signature_hash(tx_data, signable_input, txid_parts),
+            Self::V4 { tx_data } => v4_signature_hash(tx_data, signable_input),
+        };
+        hash.as_ref().try_into().expect("correct length")
+    }
+}
 
 pub struct Signer {
     global: Global,
     transparent: transparent::pczt::Bundle,
     sapling: sapling::pczt::Bundle,
     orchard: orchard::pczt::Bundle,
-    /// Cached across multiple signatures.
-    tx_data: TransactionData<EffectsOnly>,
-    txid_parts: TxDigests<Blake2bHash>,
+    /// Cached across multiple signatures. Carries either a v5 or v4 `TransactionData`
+    /// depending on `global.tx_version`.
+    cached_tx: CachedTx,
     shielded_sighash: [u8; 32],
     secp: secp256k1::Secp256k1<secp256k1::All>,
 }
 
 impl Signer {
     /// Instantiates the Signer role with the given PCZT.
+    ///
+    /// For v4 (Sapling) transactions, the [`Prover`] role MUST have already populated
+    /// every `zkproof` field on the Sapling bundle, because ZIP-243 commits to those
+    /// proof bytes in the sighash. v5 transactions have no such ordering constraint.
+    ///
+    /// [`Prover`]: super::prover::Prover
     pub fn new(pczt: Pczt) -> Result<Self, Error> {
         let Pczt {
             global,
@@ -68,26 +105,34 @@ impl Signer {
         let sapling = sapling.into_parsed().map_err(Error::SaplingParse)?;
         let orchard = orchard.into_parsed().map_err(Error::OrchardParse)?;
 
-        let tx_data = pczt_to_tx_data(&global, &transparent, &sapling, &orchard)?;
-        let txid_parts = tx_data.digest(TxIdDigester);
-
-        // TODO: Pick sighash based on tx version.
-        match (global.tx_version, global.version_group_id) {
-            (V5_TX_VERSION, V5_VERSION_GROUP_ID) => Ok(()),
-            (version, version_group_id) => Err(Error::Global(GlobalError::UnsupportedTxVersion {
-                version,
-                version_group_id,
-            })),
-        }?;
-        let shielded_sighash = sighash(&tx_data, &SignableInput::Shielded, &txid_parts);
+        let cached_tx = match (global.tx_version, global.version_group_id) {
+            (V5_TX_VERSION, V5_VERSION_GROUP_ID) => {
+                let tx_data = pczt_to_tx_data(&global, &transparent, &sapling, &orchard)?;
+                let txid_parts = tx_data.digest(TxIdDigester);
+                CachedTx::V5 {
+                    tx_data,
+                    txid_parts,
+                }
+            }
+            (V4_TX_VERSION, V4_VERSION_GROUP_ID) => {
+                let tx_data = pczt_to_tx_data_v4(&global, &transparent, &sapling)?;
+                CachedTx::V4 { tx_data }
+            }
+            (version, version_group_id) => {
+                return Err(Error::Global(GlobalError::UnsupportedTxVersion {
+                    version,
+                    version_group_id,
+                }));
+            }
+        };
+        let shielded_sighash = cached_tx.sighash(&SignableInput::Shielded);
 
         Ok(Self {
             global,
             transparent,
             sapling,
             orchard,
-            tx_data,
-            txid_parts,
+            cached_tx,
             shielded_sighash,
             secp: secp256k1::Secp256k1::new(),
         })
@@ -116,11 +161,9 @@ impl Signer {
             .ok_or(Error::InvalidIndex)?;
 
         input.with_signable_input(index, |signable_input| {
-            Ok(sighash(
-                &self.tx_data,
-                &SignableInput::Transparent(signable_input),
-                &self.txid_parts,
-            ))
+            Ok(self
+                .cached_tx
+                .sighash(&SignableInput::Transparent(signable_input)))
         })
     }
 
@@ -134,10 +177,10 @@ impl Signer {
         index: usize,
         sk: &secp256k1::SecretKey,
     ) -> Result<(), Error> {
-        self.generate_or_append_transparent_signature(index, |input, tx_data, txid_parts, secp| {
+        self.generate_or_append_transparent_signature(index, |input, cached_tx, secp| {
             input.sign(
                 index,
-                |input| sighash(tx_data, &SignableInput::Transparent(input), txid_parts),
+                |input| cached_tx.sighash(&SignableInput::Transparent(input)),
                 sk,
                 secp,
             )
@@ -154,10 +197,10 @@ impl Signer {
         index: usize,
         signature: secp256k1::ecdsa::Signature,
     ) -> Result<(), Error> {
-        self.generate_or_append_transparent_signature(index, |input, tx_data, txid_parts, secp| {
+        self.generate_or_append_transparent_signature(index, |input, cached_tx, secp| {
             input.append_signature(
                 index,
-                |input| sighash(tx_data, &SignableInput::Transparent(input), txid_parts),
+                |input| cached_tx.sighash(&SignableInput::Transparent(input)),
                 signature,
                 secp,
             )
@@ -172,8 +215,7 @@ impl Signer {
     where
         F: FnOnce(
             &mut transparent::pczt::Input,
-            &TransactionData<EffectsOnly>,
-            &TxDigests<Blake2bHash>,
+            &CachedTx,
             &secp256k1::Secp256k1<secp256k1::All>,
         ) -> Result<(), transparent::pczt::SignerError>,
     {
@@ -187,7 +229,7 @@ impl Signer {
         // TODO
 
         // Generate or apply the signature.
-        f(input, &self.tx_data, &self.txid_parts, &self.secp).map_err(Error::TransparentSign)?;
+        f(input, &self.cached_tx, &self.secp).map_err(Error::TransparentSign)?;
 
         // Update transaction modifiability:
         // - If the Signer added a signature that does not use `SIGHASH_ANYONECANPAY`, the
@@ -413,18 +455,6 @@ impl Authorization for EffectsOnly {
     type TzeAuth = core::convert::Infallible;
 }
 
-/// Helper to produce the correct sighash for a PCZT.
-fn sighash(
-    tx_data: &TransactionData<EffectsOnly>,
-    signable_input: &SignableInput,
-    txid_parts: &TxDigests<Blake2bHash>,
-) -> [u8; 32] {
-    v5_signature_hash(tx_data, signable_input, txid_parts)
-        .as_ref()
-        .try_into()
-        .expect("correct length")
-}
-
 /// Errors that can occur while creating signatures for a PCZT.
 #[derive(Debug)]
 pub enum Error {
@@ -439,6 +469,14 @@ pub enum Error {
     SaplingParse(sapling::pczt::ParseError),
     SaplingSign(sapling::pczt::SignerError),
     SaplingVerify(sapling::pczt::VerifyError),
+    /// The Sapling bundle's anchor field could not be decoded as a valid scalar.
+    /// (v4 path only.)
+    SaplingV4InvalidAnchor,
+    /// A Sapling spend or output is missing its `zkproof` field. The Prover role must
+    /// run before the Signer / IoFinalizer for v4 transactions.
+    SaplingV4MissingProof,
+    /// The Sapling bundle's `value_sum` does not fit in a `ZatBalance`. (v4 path only.)
+    SaplingV4ValueOutOfRange,
     TransparentExtract(transparent::pczt::TxExtractorError),
     TransparentParse(transparent::pczt::ParseError),
     TransparentSign(transparent::pczt::SignerError),

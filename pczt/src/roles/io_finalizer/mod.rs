@@ -5,7 +5,8 @@
 
 use rand_core::OsRng;
 use zcash_primitives::transaction::{
-    sighash::SignableInput, sighash_v5::v5_signature_hash, txid::TxIdDigester,
+    sighash::SignableInput, sighash_v4::v4_signature_hash, sighash_v5::v5_signature_hash,
+    txid::TxIdDigester,
 };
 
 use crate::{
@@ -15,9 +16,12 @@ use crate::{
         FLAG_TRANSPARENT_OUTPUTS_MODIFIABLE,
     },
 };
-use zcash_protocol::constants::{V5_TX_VERSION, V5_VERSION_GROUP_ID};
+use zcash_protocol::constants::{
+    V4_TX_VERSION, V4_VERSION_GROUP_ID, V5_TX_VERSION, V5_VERSION_GROUP_ID,
+};
 
 use super::signer::pczt_to_tx_data;
+use super::v4_sighash::pczt_to_tx_data_v4;
 
 pub struct IoFinalizer {
     pczt: Pczt,
@@ -66,21 +70,32 @@ impl IoFinalizer {
         let mut sapling = sapling.into_parsed().map_err(Error::SaplingParse)?;
         let mut orchard = orchard.into_parsed().map_err(Error::OrchardParse)?;
 
-        let tx_data = pczt_to_tx_data(&global, &transparent, &sapling, &orchard)?;
-        let txid_parts = tx_data.digest(TxIdDigester);
-
-        // TODO: Pick sighash based on tx version.
-        match (global.tx_version, global.version_group_id) {
-            (V5_TX_VERSION, V5_VERSION_GROUP_ID) => Ok(()),
-            (version, version_group_id) => Err(Error::UnsupportedTxVersion {
-                version,
-                version_group_id,
-            }),
-        }?;
-        let shielded_sighash = v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
-            .as_ref()
-            .try_into()
-            .expect("correct length");
+        // Dispatch on tx version. v5 uses ZIP-244, v4 uses ZIP-243 (which commits to
+        // Sapling Groth16 proof bytes — the Prover MUST have run before reaching here
+        // for v4 transactions).
+        let shielded_sighash: [u8; 32] = match (global.tx_version, global.version_group_id) {
+            (V5_TX_VERSION, V5_VERSION_GROUP_ID) => {
+                let tx_data = pczt_to_tx_data(&global, &transparent, &sapling, &orchard)?;
+                let txid_parts = tx_data.digest(TxIdDigester);
+                v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
+                    .as_ref()
+                    .try_into()
+                    .expect("correct length")
+            }
+            (V4_TX_VERSION, V4_VERSION_GROUP_ID) => {
+                let tx_data = pczt_to_tx_data_v4(&global, &transparent, &sapling)?;
+                v4_signature_hash(&tx_data, &SignableInput::Shielded)
+                    .as_ref()
+                    .try_into()
+                    .expect("correct length")
+            }
+            (version, version_group_id) => {
+                return Err(Error::UnsupportedTxVersion {
+                    version,
+                    version_group_id,
+                });
+            }
+        };
 
         sapling
             .finalize_io(shielded_sighash, OsRng)

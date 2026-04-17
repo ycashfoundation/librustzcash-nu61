@@ -25,6 +25,9 @@ pub mod prover;
 #[cfg(feature = "signer")]
 pub mod signer;
 
+#[cfg(feature = "signer")]
+pub(crate) mod v4_sighash;
+
 pub mod low_level_signer;
 
 pub mod combiner;
