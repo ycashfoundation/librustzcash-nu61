@@ -5,11 +5,7 @@
 
 use rand_core::OsRng;
 use zcash_primitives::transaction::{
-    TxVersion,
-    sighash::SignableInput,
-    sighash_v4::v4_signature_hash,
-    sighash_v5::v5_signature_hash,
-    txid::TxIdDigester,
+    sighash::{signature_hash, SignableInput}, txid::TxIdDigester,
 };
 
 use crate::{
@@ -83,25 +79,13 @@ impl IoFinalizer {
                 version_group_id,
             }),
         }?;
-        // Manual dispatch to v4 (ZIP-243) or v5 (ZIP-244) sighash. The
-        // polymorphic `signature_hash` can't be used on a PCZT here because
-        // `EffectsOnly` erases the Sapling proof-bytes types that its bounds
-        // require; both per-version functions have looser bounds that
-        // `EffectsOnly` does satisfy.
-        let shielded_sighash: [u8; 32] = match tx_data.version() {
-            TxVersion::V4 => *v4_signature_hash(&tx_data, &SignableInput::Shielded)
-                .as_ref()
-                .try_into()
-                .expect("blake2b 32-byte output"),
-            TxVersion::V5 => *v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
-                .as_ref()
-                .try_into()
-                .expect("blake2b 32-byte output"),
-            other => panic!(
-                "PCZT IoFinalizer rejected tx version before sighash; unreachable for {:?}",
-                other
-            ),
-        };
+        // `signature_hash` internally dispatches to v4 (ZIP-243) or v5
+        // (ZIP-244) based on `tx_data.version` — needed to finalize Sapling
+        // bundles on v4-only networks like Ycash.
+        let shielded_sighash = signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
+            .as_ref()
+            .try_into()
+            .expect("correct length");
 
         sapling
             .finalize_io(shielded_sighash, OsRng)
