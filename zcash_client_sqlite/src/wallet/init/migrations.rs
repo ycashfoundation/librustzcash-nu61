@@ -394,6 +394,8 @@ pub(super) fn verify_network_compatibility<P: consensus::Parameters>(
                     consensus::NetworkType::Main => "mainnet",
                     consensus::NetworkType::Test => "testnet",
                     consensus::NetworkType::Regtest => "regtest",
+                    consensus::NetworkType::YcashMain => "ycash-mainnet",
+                    consensus::NetworkType::YcashTest => "ycash-testnet",
                 };
                 return Err(WalletMigrationError::CorruptedData(format!(
                     "Network type mismatch: account UFVK is for {} but attempting to initialize for {}.",

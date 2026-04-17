@@ -230,9 +230,14 @@ impl TxVersion {
         match consensus_branch_id {
             BranchId::Sprout => TxVersion::Sprout(2),
             BranchId::Overwinter => TxVersion::V3,
-            BranchId::Sapling | BranchId::Blossom | BranchId::Heartwood | BranchId::Canopy => {
-                TxVersion::V4
-            }
+            BranchId::Sapling
+            | BranchId::Blossom
+            | BranchId::Heartwood
+            | BranchId::Canopy
+            | BranchId::Ycash
+            | BranchId::YBlossom
+            | BranchId::YHeartwood
+            | BranchId::YCanopy => TxVersion::V4,
             BranchId::Nu5 => TxVersion::V5,
             BranchId::Nu6 => TxVersion::V5,
             BranchId::Nu6_1 => TxVersion::V5,

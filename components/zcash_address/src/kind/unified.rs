@@ -221,6 +221,9 @@ pub(crate) mod private {
                 NetworkType::Main => Self::MAINNET,
                 NetworkType::Test => Self::TESTNET,
                 NetworkType::Regtest => Self::REGTEST,
+                NetworkType::YcashMain | NetworkType::YcashTest => {
+                    panic!("Ycash does not support Unified Addresses, FVKs, or IVKs")
+                }
             }
         }
 

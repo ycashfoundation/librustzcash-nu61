@@ -26,6 +26,9 @@ fn pub_prefix<P: consensus::Parameters>(params: &P) -> Prefix {
         consensus::NetworkType::Main => Prefix::XPUB,
         consensus::NetworkType::Test => Prefix::TPUB,
         consensus::NetworkType::Regtest => Prefix::TPUB,
+        // Ycash preserves Zcash's BIP32 prefixes (xpub/tpub) — see ycashd chainparams.cpp.
+        consensus::NetworkType::YcashMain => Prefix::XPUB,
+        consensus::NetworkType::YcashTest => Prefix::TPUB,
     }
 }
 
