@@ -3,6 +3,8 @@
 pub mod mainnet;
 pub mod regtest;
 pub mod testnet;
+pub mod ycash_mainnet;
+pub mod ycash_testnet;
 
 // The `V<n>_TX_VERSION` constants, although trivial, serve to clarify that a
 // transaction version is meant in APIs that use a bare `u32`. Consider using
