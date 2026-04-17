@@ -235,9 +235,21 @@ where
     let mut request = service::GetSubtreeRootsArg::default();
     request.set_shielded_protocol(service::ShieldedProtocol::Sapling);
 
-    let sapling_roots: Vec<CommitmentTreeRoot<sapling::Node>> = client
-        .get_subtree_roots(request)
-        .await?
+    let sapling_response = match client.get_subtree_roots(request).await {
+        Ok(resp) => resp,
+        Err(status) if status.code() == tonic::Code::Unimplemented => {
+            // Older lightwalletd implementations (notably Ycash's fork, based on
+            // lightwalletd ~0.4.6) predate `GetSubtreeRoots`. Treat this as "no
+            // pre-computed subtrees available" — the sync pipeline will fall back
+            // to computing commitment tree state from scanned blocks, which is
+            // slower but correct.
+            info!("Server does not implement GetSubtreeRoots; skipping subtree-root prefetch");
+            return Ok(());
+        }
+        Err(status) => return Err(Error::Server(status)),
+    };
+
+    let sapling_roots: Vec<CommitmentTreeRoot<sapling::Node>> = sapling_response
         .into_inner()
         .and_then(|root| async move {
             let root_hash = sapling::Node::read(&root.root_hash[..])?;
@@ -259,9 +271,18 @@ where
         let mut request = service::GetSubtreeRootsArg::default();
         request.set_shielded_protocol(service::ShieldedProtocol::Orchard);
 
-        let orchard_roots: Vec<CommitmentTreeRoot<MerkleHashOrchard>> = client
-            .get_subtree_roots(request)
-            .await?
+        let orchard_response = match client.get_subtree_roots(request).await {
+            Ok(resp) => resp,
+            Err(status) if status.code() == tonic::Code::Unimplemented => {
+                info!(
+                    "Server does not implement GetSubtreeRoots for Orchard; skipping Orchard subtree-root prefetch",
+                );
+                return Ok(());
+            }
+            Err(status) => return Err(Error::Server(status)),
+        };
+
+        let orchard_roots: Vec<CommitmentTreeRoot<MerkleHashOrchard>> = orchard_response
             .into_inner()
             .and_then(|root| async move {
                 let root_hash = MerkleHashOrchard::read(&root.root_hash[..])?;
