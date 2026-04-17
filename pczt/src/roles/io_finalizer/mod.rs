@@ -5,7 +5,7 @@
 
 use rand_core::OsRng;
 use zcash_primitives::transaction::{
-    sighash::SignableInput, sighash_v5::v5_signature_hash, txid::TxIdDigester,
+    sighash::{signature_hash, SignableInput}, txid::TxIdDigester,
 };
 
 use crate::{
@@ -15,7 +15,9 @@ use crate::{
         FLAG_TRANSPARENT_OUTPUTS_MODIFIABLE,
     },
 };
-use zcash_protocol::constants::{V5_TX_VERSION, V5_VERSION_GROUP_ID};
+use zcash_protocol::constants::{
+    V4_TX_VERSION, V4_VERSION_GROUP_ID, V5_TX_VERSION, V5_VERSION_GROUP_ID,
+};
 
 use super::signer::pczt_to_tx_data;
 
@@ -69,15 +71,18 @@ impl IoFinalizer {
         let tx_data = pczt_to_tx_data(&global, &transparent, &sapling, &orchard)?;
         let txid_parts = tx_data.digest(TxIdDigester);
 
-        // TODO: Pick sighash based on tx version.
         match (global.tx_version, global.version_group_id) {
-            (V5_TX_VERSION, V5_VERSION_GROUP_ID) => Ok(()),
+            (V5_TX_VERSION, V5_VERSION_GROUP_ID)
+            | (V4_TX_VERSION, V4_VERSION_GROUP_ID) => Ok(()),
             (version, version_group_id) => Err(Error::UnsupportedTxVersion {
                 version,
                 version_group_id,
             }),
         }?;
-        let shielded_sighash = v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
+        // `signature_hash` internally dispatches to v4 (ZIP-243) or v5
+        // (ZIP-244) based on `tx_data.version` — needed to finalize Sapling
+        // bundles on v4-only networks like Ycash.
+        let shielded_sighash = signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
             .as_ref()
             .try_into()
             .expect("correct length");

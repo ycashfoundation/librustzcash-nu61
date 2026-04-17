@@ -19,8 +19,8 @@ use rand_core::OsRng;
 
 use ::transparent::sighash::{SIGHASH_ANYONECANPAY, SIGHASH_NONE, SIGHASH_SINGLE};
 use zcash_primitives::transaction::{
-    Authorization, TransactionData, TxDigests, TxVersion, sighash::SignableInput,
-    sighash_v5::v5_signature_hash, txid::TxIdDigester,
+    Authorization, TransactionData, TxDigests, TxVersion, sighash::{signature_hash, SignableInput},
+    txid::TxIdDigester,
 };
 use zcash_protocol::consensus::BranchId;
 #[cfg(all(
@@ -39,6 +39,11 @@ use crate::{
 
 use crate::common::determine_lock_time;
 
+const V4_TX_VERSION: u32 = 4;
+// Sapling version group id (ZIP-225). Used on Zcash for v4 Sapling transactions
+// and — perpetually — on Ycash, which never activated NU5 and therefore never
+// reached the v5 transaction format.
+const SAPLING_VERSION_GROUP_ID: u32 = 0x892F_2085;
 const V5_TX_VERSION: u32 = 5;
 const V5_VERSION_GROUP_ID: u32 = 0x26A7270A;
 
@@ -71,14 +76,17 @@ impl Signer {
         let tx_data = pczt_to_tx_data(&global, &transparent, &sapling, &orchard)?;
         let txid_parts = tx_data.digest(TxIdDigester);
 
-        // TODO: Pick sighash based on tx version.
         match (global.tx_version, global.version_group_id) {
-            (V5_TX_VERSION, V5_VERSION_GROUP_ID) => Ok(()),
+            (V5_TX_VERSION, V5_VERSION_GROUP_ID)
+            | (V4_TX_VERSION, SAPLING_VERSION_GROUP_ID) => Ok(()),
             (version, version_group_id) => Err(Error::Global(GlobalError::UnsupportedTxVersion {
                 version,
                 version_group_id,
             })),
         }?;
+        // `signature_hash` internally dispatches to the v4 (ZIP-243) or
+        // v5 (ZIP-244) sighash algorithm based on `tx_data.version`. Ycash,
+        // which never activated NU5, stays on v4 forever.
         let shielded_sighash = sighash(&tx_data, &SignableInput::Shielded, &txid_parts);
 
         Ok(Self {
@@ -369,6 +377,7 @@ pub(crate) fn pczt_to_tx_data(
 ) -> Result<TransactionData<EffectsOnly>, Error> {
     let version = match (global.tx_version, global.version_group_id) {
         (V5_TX_VERSION, V5_VERSION_GROUP_ID) => Ok(TxVersion::V5),
+        (V4_TX_VERSION, SAPLING_VERSION_GROUP_ID) => Ok(TxVersion::V4),
         (version, version_group_id) => Err(Error::Global(GlobalError::UnsupportedTxVersion {
             version,
             version_group_id,
@@ -413,13 +422,14 @@ impl Authorization for EffectsOnly {
     type TzeAuth = core::convert::Infallible;
 }
 
-/// Helper to produce the correct sighash for a PCZT.
+/// Helper to produce the correct sighash for a PCZT. Dispatches to v4 / v5
+/// / v6 internally based on `tx_data.version`.
 fn sighash(
     tx_data: &TransactionData<EffectsOnly>,
     signable_input: &SignableInput,
     txid_parts: &TxDigests<Blake2bHash>,
 ) -> [u8; 32] {
-    v5_signature_hash(tx_data, signable_input, txid_parts)
+    signature_hash(tx_data, signable_input, txid_parts)
         .as_ref()
         .try_into()
         .expect("correct length")
