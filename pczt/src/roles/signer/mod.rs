@@ -19,7 +19,10 @@ use rand_core::OsRng;
 
 use ::transparent::sighash::{SIGHASH_ANYONECANPAY, SIGHASH_NONE, SIGHASH_SINGLE};
 use zcash_primitives::transaction::{
-    Authorization, TransactionData, TxDigests, TxVersion, sighash::{signature_hash, SignableInput},
+    Authorization, TransactionData, TxDigests, TxVersion,
+    sighash::SignableInput,
+    sighash_v4::v4_signature_hash,
+    sighash_v5::v5_signature_hash,
     txid::TxIdDigester,
 };
 use zcash_protocol::consensus::BranchId;
@@ -422,17 +425,34 @@ impl Authorization for EffectsOnly {
     type TzeAuth = core::convert::Infallible;
 }
 
-/// Helper to produce the correct sighash for a PCZT. Dispatches to v4 / v5
-/// / v6 internally based on `tx_data.version`.
+/// Helper to produce the correct sighash for a PCZT. Dispatches to v4
+/// (ZIP-243, Sapling) or v5 (ZIP-244, NU5+) based on `tx_data.version`.
+///
+/// We can't defer to the polymorphic `zcash_primitives::transaction::sighash::
+/// signature_hash` because its bounds require `EffectsOnly` to expose concrete
+/// Groth16 proof-bytes types on the Sapling bundle — which it intentionally
+/// erases. Both per-version functions have looser bounds that `EffectsOnly`
+/// actually satisfies, so we match and call them directly.
 fn sighash(
     tx_data: &TransactionData<EffectsOnly>,
     signable_input: &SignableInput,
     txid_parts: &TxDigests<Blake2bHash>,
 ) -> [u8; 32] {
-    signature_hash(tx_data, signable_input, txid_parts)
-        .as_ref()
-        .try_into()
-        .expect("correct length")
+    let bytes: &[u8; 32] = match tx_data.version() {
+        TxVersion::V4 => v4_signature_hash(tx_data, signable_input)
+            .as_ref()
+            .try_into()
+            .expect("blake2b 32-byte output"),
+        TxVersion::V5 => v5_signature_hash(tx_data, signable_input, txid_parts)
+            .as_ref()
+            .try_into()
+            .expect("blake2b 32-byte output"),
+        other => panic!(
+            "PCZT Signer rejected tx version before sighash; unreachable for {:?}",
+            other
+        ),
+    };
+    *bytes
 }
 
 /// Errors that can occur while creating signatures for a PCZT.
