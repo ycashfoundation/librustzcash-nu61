@@ -159,7 +159,7 @@ use zcash_primitives::block::BlockHash;
 use zcash_protocol::consensus::{self, BlockHeight};
 
 use crate::{
-    data_api::{NullifierQuery, WalletWrite},
+    data_api::{BlockMetadata, NullifierQuery, WalletWrite},
     proto::compact_formats::CompactBlock,
     scanning::{BatchRunners, Nullifiers, ScanningKeys, scan_block_with_runners},
 };
@@ -612,6 +612,24 @@ where
         data_db
             .block_metadata(from_height - 1)
             .map_err(Error::Wallet)?
+            .or_else(|| {
+                // Fall back to the caller-provided `from_state`, which
+                // carries the note-commitment-tree frontiers as of
+                // `from_height - 1` (the assertion above enforces this).
+                // Without this fallback the scanner can't determine the
+                // tree sizes for the first block in the range when (a) the
+                // wallet has never scanned a prior block AND (b) the
+                // `CompactBlock` source omits `chainMetadata` — the shape
+                // of responses served by older lightwalletd forks such as
+                // Ycash's, which predates the `chainMetadata` field.
+                Some(BlockMetadata::from_parts(
+                    from_state.block_height(),
+                    from_state.block_hash(),
+                    u32::try_from(from_state.final_sapling_tree().tree_size()).ok(),
+                    #[cfg(feature = "orchard")]
+                    u32::try_from(from_state.final_orchard_tree().tree_size()).ok(),
+                ))
+            })
     } else {
         None
     };
