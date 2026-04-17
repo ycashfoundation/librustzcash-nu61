@@ -8,7 +8,7 @@ use core::ops::{Add, Bound, RangeBounds, Sub};
 #[cfg(feature = "std")]
 use memuse::DynamicUsage;
 
-use crate::constants::{mainnet, regtest, testnet};
+use crate::constants::{mainnet, regtest, testnet, ycash_mainnet, ycash_testnet};
 
 /// A wrapper type representing blockchain heights.
 ///
@@ -138,6 +138,10 @@ pub enum NetworkType {
     /// For some address types there is no distinction between test and regtest encodings;
     /// those will always be parsed as `Network::Test`.
     Regtest,
+    /// Ycash Mainnet.
+    YcashMain,
+    /// Ycash Testnet.
+    YcashTest,
 }
 
 #[cfg(feature = "std")]
@@ -238,6 +242,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::COIN_TYPE,
             NetworkType::Test => testnet::COIN_TYPE,
             NetworkType::Regtest => regtest::COIN_TYPE,
+            NetworkType::YcashMain => ycash_mainnet::COIN_TYPE,
+            NetworkType::YcashTest => ycash_testnet::COIN_TYPE,
         }
     }
 
@@ -246,6 +252,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_SAPLING_EXTENDED_SPENDING_KEY,
             NetworkType::Test => testnet::HRP_SAPLING_EXTENDED_SPENDING_KEY,
             NetworkType::Regtest => regtest::HRP_SAPLING_EXTENDED_SPENDING_KEY,
+            NetworkType::YcashMain => ycash_mainnet::HRP_SAPLING_EXTENDED_SPENDING_KEY,
+            NetworkType::YcashTest => ycash_testnet::HRP_SAPLING_EXTENDED_SPENDING_KEY,
         }
     }
 
@@ -254,6 +262,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
             NetworkType::Test => testnet::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
             NetworkType::Regtest => regtest::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
+            NetworkType::YcashMain => ycash_mainnet::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
+            NetworkType::YcashTest => ycash_testnet::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
         }
     }
 
@@ -262,6 +272,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_SAPLING_PAYMENT_ADDRESS,
             NetworkType::Test => testnet::HRP_SAPLING_PAYMENT_ADDRESS,
             NetworkType::Regtest => regtest::HRP_SAPLING_PAYMENT_ADDRESS,
+            NetworkType::YcashMain => ycash_mainnet::HRP_SAPLING_PAYMENT_ADDRESS,
+            NetworkType::YcashTest => ycash_testnet::HRP_SAPLING_PAYMENT_ADDRESS,
         }
     }
 
@@ -270,6 +282,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_SPROUT_ADDRESS_PREFIX,
             NetworkType::Test => testnet::B58_SPROUT_ADDRESS_PREFIX,
             NetworkType::Regtest => regtest::B58_SPROUT_ADDRESS_PREFIX,
+            NetworkType::YcashMain => ycash_mainnet::B58_SPROUT_ADDRESS_PREFIX,
+            NetworkType::YcashTest => ycash_testnet::B58_SPROUT_ADDRESS_PREFIX,
         }
     }
 
@@ -278,6 +292,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_PUBKEY_ADDRESS_PREFIX,
             NetworkType::Test => testnet::B58_PUBKEY_ADDRESS_PREFIX,
             NetworkType::Regtest => regtest::B58_PUBKEY_ADDRESS_PREFIX,
+            NetworkType::YcashMain => ycash_mainnet::B58_PUBKEY_ADDRESS_PREFIX,
+            NetworkType::YcashTest => ycash_testnet::B58_PUBKEY_ADDRESS_PREFIX,
         }
     }
 
@@ -286,6 +302,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_SECRET_KEY_PREFIX,
             NetworkType::Test => testnet::B58_SECRET_KEY_PREFIX,
             NetworkType::Regtest => regtest::B58_SECRET_KEY_PREFIX,
+            NetworkType::YcashMain => ycash_mainnet::B58_SECRET_KEY_PREFIX,
+            NetworkType::YcashTest => ycash_testnet::B58_SECRET_KEY_PREFIX,
         }
     }
 
@@ -294,6 +312,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_SCRIPT_ADDRESS_PREFIX,
             NetworkType::Test => testnet::B58_SCRIPT_ADDRESS_PREFIX,
             NetworkType::Regtest => regtest::B58_SCRIPT_ADDRESS_PREFIX,
+            NetworkType::YcashMain => ycash_mainnet::B58_SCRIPT_ADDRESS_PREFIX,
+            NetworkType::YcashTest => ycash_testnet::B58_SCRIPT_ADDRESS_PREFIX,
         }
     }
 
@@ -302,6 +322,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_TEX_ADDRESS,
             NetworkType::Test => testnet::HRP_TEX_ADDRESS,
             NetworkType::Regtest => regtest::HRP_TEX_ADDRESS,
+            NetworkType::YcashMain => ycash_mainnet::HRP_TEX_ADDRESS,
+            NetworkType::YcashTest => ycash_testnet::HRP_TEX_ADDRESS,
         }
     }
 
@@ -310,6 +332,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_UNIFIED_ADDRESS,
             NetworkType::Test => testnet::HRP_UNIFIED_ADDRESS,
             NetworkType::Regtest => regtest::HRP_UNIFIED_ADDRESS,
+            NetworkType::YcashMain => ycash_mainnet::HRP_UNIFIED_ADDRESS,
+            NetworkType::YcashTest => ycash_testnet::HRP_UNIFIED_ADDRESS,
         }
     }
 
@@ -318,6 +342,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_UNIFIED_FVK,
             NetworkType::Test => testnet::HRP_UNIFIED_FVK,
             NetworkType::Regtest => regtest::HRP_UNIFIED_FVK,
+            NetworkType::YcashMain => ycash_mainnet::HRP_UNIFIED_FVK,
+            NetworkType::YcashTest => ycash_testnet::HRP_UNIFIED_FVK,
         }
     }
 
@@ -326,6 +352,8 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_UNIFIED_IVK,
             NetworkType::Test => testnet::HRP_UNIFIED_IVK,
             NetworkType::Regtest => regtest::HRP_UNIFIED_IVK,
+            NetworkType::YcashMain => ycash_mainnet::HRP_UNIFIED_IVK,
+            NetworkType::YcashTest => ycash_testnet::HRP_UNIFIED_IVK,
         }
     }
 }
@@ -338,6 +366,16 @@ pub trait Parameters: Clone {
     /// Returns the activation height for a particular network upgrade,
     /// if an activation height has been set.
     fn activation_height(&self, nu: NetworkUpgrade) -> Option<BlockHeight>;
+
+    /// Returns the consensus branch ID associated with a network upgrade on this network.
+    ///
+    /// The default maps each network upgrade to its canonical Zcash branch ID. Networks
+    /// that fork Zcash's consensus rules (e.g. Ycash, which uses distinct branch IDs for
+    /// Blossom/Heartwood/Canopy after the Ycash fork for two-way replay protection) must
+    /// override this to return the appropriate network-specific branch IDs.
+    fn branch_id(&self, nu: NetworkUpgrade) -> BranchId {
+        nu.branch_id()
+    }
 
     /// Determines whether the specified network upgrade is active as of the
     /// provided block height on the network to which this Parameters value applies.
@@ -353,6 +391,10 @@ impl<P: Parameters> Parameters for &P {
 
     fn activation_height(&self, nu: NetworkUpgrade) -> Option<BlockHeight> {
         (*self).activation_height(nu)
+    }
+
+    fn branch_id(&self, nu: NetworkUpgrade) -> BranchId {
+        (*self).branch_id(nu)
     }
 }
 
@@ -427,6 +469,7 @@ impl Parameters for MainNetwork {
         match nu {
             NetworkUpgrade::Overwinter => Some(BlockHeight(347_500)),
             NetworkUpgrade::Sapling => Some(BlockHeight(419_200)),
+            NetworkUpgrade::Ycash => None,
             NetworkUpgrade::Blossom => Some(BlockHeight(653_600)),
             NetworkUpgrade::Heartwood => Some(BlockHeight(903_000)),
             NetworkUpgrade::Canopy => Some(BlockHeight(1_046_400)),
@@ -460,6 +503,7 @@ impl Parameters for TestNetwork {
         match nu {
             NetworkUpgrade::Overwinter => Some(BlockHeight(207_500)),
             NetworkUpgrade::Sapling => Some(BlockHeight(280_000)),
+            NetworkUpgrade::Ycash => None,
             NetworkUpgrade::Blossom => Some(BlockHeight(584_000)),
             NetworkUpgrade::Heartwood => Some(BlockHeight(903_800)),
             NetworkUpgrade::Canopy => Some(BlockHeight(1_028_500)),
@@ -502,6 +546,16 @@ impl Parameters for Network {
     }
 }
 
+mod ycash;
+
+pub use ycash::{MainNetwork as YcashMainNetwork, TestNetwork as YcashTestNetwork};
+
+/// The Ycash production network.
+pub const YCASH_MAIN_NETWORK: YcashMainNetwork = YcashMainNetwork;
+
+/// The Ycash test network.
+pub const YCASH_TEST_NETWORK: YcashTestNetwork = YcashTestNetwork;
+
 /// An event that occurs at a specified height on the Zcash chain, at which point the
 /// consensus rules enforced by the network are altered.
 ///
@@ -516,6 +570,11 @@ pub enum NetworkUpgrade {
     ///
     /// [Sapling]: https://z.cash/upgrade/sapling/
     Sapling,
+    /// The Ycash chain-fork network upgrade.
+    ///
+    /// Ycash split from Zcash at this activation (mainnet height 570000, testnet 510248).
+    /// On non-Ycash networks this upgrade has no activation height.
+    Ycash,
     /// The [Blossom] network upgrade.
     ///
     /// [Blossom]: https://z.cash/upgrade/blossom/
@@ -562,6 +621,7 @@ impl fmt::Display for NetworkUpgrade {
         match self {
             NetworkUpgrade::Overwinter => write!(f, "Overwinter"),
             NetworkUpgrade::Sapling => write!(f, "Sapling"),
+            NetworkUpgrade::Ycash => write!(f, "Ycash"),
             NetworkUpgrade::Blossom => write!(f, "Blossom"),
             NetworkUpgrade::Heartwood => write!(f, "Heartwood"),
             NetworkUpgrade::Canopy => write!(f, "Canopy"),
@@ -581,6 +641,7 @@ impl NetworkUpgrade {
         match self {
             NetworkUpgrade::Overwinter => BranchId::Overwinter,
             NetworkUpgrade::Sapling => BranchId::Sapling,
+            NetworkUpgrade::Ycash => BranchId::Ycash,
             NetworkUpgrade::Blossom => BranchId::Blossom,
             NetworkUpgrade::Heartwood => BranchId::Heartwood,
             NetworkUpgrade::Canopy => BranchId::Canopy,
@@ -602,6 +663,7 @@ impl NetworkUpgrade {
 const UPGRADES_IN_ORDER: &[NetworkUpgrade] = &[
     NetworkUpgrade::Overwinter,
     NetworkUpgrade::Sapling,
+    NetworkUpgrade::Ycash,
     NetworkUpgrade::Blossom,
     NetworkUpgrade::Heartwood,
     NetworkUpgrade::Canopy,
@@ -638,12 +700,21 @@ pub enum BranchId {
     Overwinter,
     /// The consensus rules deployed by [`NetworkUpgrade::Sapling`].
     Sapling,
+    /// The consensus rules deployed by [`NetworkUpgrade::Ycash`] — active only on Ycash.
+    Ycash,
     /// The consensus rules deployed by [`NetworkUpgrade::Blossom`].
     Blossom,
+    /// The Blossom-era consensus rules on the Ycash chain (distinct branch ID from Zcash's
+    /// [`BranchId::Blossom`] for two-way replay protection across the fork).
+    YBlossom,
     /// The consensus rules deployed by [`NetworkUpgrade::Heartwood`].
     Heartwood,
+    /// The Heartwood-era consensus rules on the Ycash chain.
+    YHeartwood,
     /// The consensus rules deployed by [`NetworkUpgrade::Canopy`].
     Canopy,
+    /// The Canopy-era consensus rules on the Ycash chain.
+    YCanopy,
     /// The consensus rules deployed by [`NetworkUpgrade::Nu5`].
     Nu5,
     /// The consensus rules deployed by [`NetworkUpgrade::Nu6`].
@@ -670,9 +741,13 @@ impl TryFrom<u32> for BranchId {
             0 => Ok(BranchId::Sprout),
             0x5ba8_1b19 => Ok(BranchId::Overwinter),
             0x76b8_09bb => Ok(BranchId::Sapling),
+            0x374d_694f => Ok(BranchId::Ycash),
             0x2bb4_0e60 => Ok(BranchId::Blossom),
+            0x8e47_1bd6 => Ok(BranchId::YBlossom),
             0xf5b9_230b => Ok(BranchId::Heartwood),
+            0x6631_4da3 => Ok(BranchId::YHeartwood),
             0xe9ff_75a6 => Ok(BranchId::Canopy),
+            0x19bd_2d2f => Ok(BranchId::YCanopy),
             0xc2d6_d0b4 => Ok(BranchId::Nu5),
             0xc8e7_1055 => Ok(BranchId::Nu6),
             0x4dec_4df0 => Ok(BranchId::Nu6_1),
@@ -691,9 +766,13 @@ impl From<BranchId> for u32 {
             BranchId::Sprout => 0,
             BranchId::Overwinter => 0x5ba8_1b19,
             BranchId::Sapling => 0x76b8_09bb,
+            BranchId::Ycash => 0x374d_694f,
             BranchId::Blossom => 0x2bb4_0e60,
+            BranchId::YBlossom => 0x8e47_1bd6,
             BranchId::Heartwood => 0xf5b9_230b,
+            BranchId::YHeartwood => 0x6631_4da3,
             BranchId::Canopy => 0xe9ff_75a6,
+            BranchId::YCanopy => 0x19bd_2d2f,
             BranchId::Nu5 => 0xc2d6_d0b4,
             BranchId::Nu6 => 0xc8e7_1055,
             BranchId::Nu6_1 => 0x4dec_4df0,
@@ -713,7 +792,7 @@ impl BranchId {
     pub fn for_height<P: Parameters>(parameters: &P, height: BlockHeight) -> Self {
         for nu in UPGRADES_IN_ORDER.iter().rev() {
             if parameters.is_nu_active(*nu, height) {
-                return nu.branch_id();
+                return parameters.branch_id(*nu);
             }
         }
 
@@ -745,51 +824,30 @@ impl BranchId {
         &self,
         params: &P,
     ) -> Option<(BlockHeight, Option<BlockHeight>)> {
-        match self {
-            BranchId::Sprout => params
+        if matches!(self, BranchId::Sprout) {
+            return params
                 .activation_height(NetworkUpgrade::Overwinter)
-                .map(|upper| (BlockHeight(0), Some(upper))),
-            BranchId::Overwinter => params
-                .activation_height(NetworkUpgrade::Overwinter)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Sapling))),
-            BranchId::Sapling => params
-                .activation_height(NetworkUpgrade::Sapling)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Blossom))),
-            BranchId::Blossom => params
-                .activation_height(NetworkUpgrade::Blossom)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Heartwood))),
-            BranchId::Heartwood => params
-                .activation_height(NetworkUpgrade::Heartwood)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Canopy))),
-            BranchId::Canopy => params
-                .activation_height(NetworkUpgrade::Canopy)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Nu5))),
-            BranchId::Nu5 => params
-                .activation_height(NetworkUpgrade::Nu5)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Nu6))),
-            BranchId::Nu6 => params
-                .activation_height(NetworkUpgrade::Nu6)
-                .map(|lower| (lower, params.activation_height(NetworkUpgrade::Nu6_1))),
-            BranchId::Nu6_1 => params
-                .activation_height(NetworkUpgrade::Nu6_1)
-                .map(|lower| {
-                    #[cfg(zcash_unstable = "nu7")]
-                    let upper = params.activation_height(NetworkUpgrade::Nu7);
-                    #[cfg(zcash_unstable = "zfuture")]
-                    let upper = params.activation_height(NetworkUpgrade::ZFuture);
-                    #[cfg(not(any(zcash_unstable = "nu7", zcash_unstable = "zfuture")))]
-                    let upper = None;
-                    (lower, upper)
-                }),
-            #[cfg(zcash_unstable = "nu7")]
-            BranchId::Nu7 => params
-                .activation_height(NetworkUpgrade::Nu7)
-                .map(|lower| (lower, None)),
-            #[cfg(zcash_unstable = "zfuture")]
-            BranchId::ZFuture => params
-                .activation_height(NetworkUpgrade::ZFuture)
-                .map(|lower| (lower, None)),
+                .map(|upper| (BlockHeight(0), Some(upper)));
         }
+
+        // Walk the upgrade list and find the upgrade that maps to this branch id on the
+        // given network. The mapping is network-dependent (e.g. on Ycash,
+        // `NetworkUpgrade::Blossom` maps to `BranchId::YBlossom` rather than
+        // `BranchId::Blossom`), so we delegate via `parameters.branch_id`. The upper bound
+        // is the activation height of the next upgrade that is actually activated on this
+        // network, which lets post-Sapling bounds skip over Ycash on Zcash and skip over
+        // Zcash's Blossom on Ycash.
+        for (idx, nu) in UPGRADES_IN_ORDER.iter().enumerate() {
+            if params.branch_id(*nu) != *self {
+                continue;
+            }
+            let lower = params.activation_height(*nu)?;
+            let upper = UPGRADES_IN_ORDER[idx + 1..]
+                .iter()
+                .find_map(|next| params.activation_height(*next));
+            return Some((lower, upper));
+        }
+        None
     }
 
     pub fn sprout_uses_groth_proofs(&self) -> bool {
@@ -809,9 +867,13 @@ pub mod testing {
             BranchId::Sprout,
             BranchId::Overwinter,
             BranchId::Sapling,
+            BranchId::Ycash,
             BranchId::Blossom,
+            BranchId::YBlossom,
             BranchId::Heartwood,
+            BranchId::YHeartwood,
             BranchId::Canopy,
+            BranchId::YCanopy,
             BranchId::Nu5,
             BranchId::Nu6,
             BranchId::Nu6_1,
@@ -847,26 +909,36 @@ pub mod testing {
 mod tests {
     use super::{
         BlockHeight, BranchId, NetworkUpgrade, Parameters, MAIN_NETWORK, UPGRADES_IN_ORDER,
+        YCASH_MAIN_NETWORK,
     };
+
+    /// UPGRADES_IN_ORDER is a global list; individual networks may skip some upgrades
+    /// (e.g. Zcash networks skip `NetworkUpgrade::Ycash`, Ycash networks stop at Canopy).
+    /// The invariant we check per network is: when two *consecutive list entries are both
+    /// activated* on that network, they must be in ascending activation order.
+    fn check_nu_ordering<P: Parameters>(params: &P) {
+        let mut prev: Option<(NetworkUpgrade, BlockHeight)> = None;
+        for nu in UPGRADES_IN_ORDER {
+            if let Some(h) = params.activation_height(*nu) {
+                if let Some((prev_nu, prev_h)) = prev {
+                    assert!(
+                        prev_h < h,
+                        "{} ({}) should precede {} ({}) in UPGRADES_IN_ORDER",
+                        prev_nu,
+                        prev_h,
+                        nu,
+                        h,
+                    );
+                }
+                prev = Some((*nu, h));
+            }
+        }
+    }
 
     #[test]
     fn nu_ordering() {
-        for i in 1..UPGRADES_IN_ORDER.len() {
-            let nu_a = UPGRADES_IN_ORDER[i - 1];
-            let nu_b = UPGRADES_IN_ORDER[i];
-            match (
-                MAIN_NETWORK.activation_height(nu_a),
-                MAIN_NETWORK.activation_height(nu_b),
-            ) {
-                (Some(a), Some(b)) if a < b => (),
-                (Some(_), None) => (),
-                (None, None) => (),
-                _ => panic!(
-                    "{} should not be before {} in UPGRADES_IN_ORDER",
-                    nu_a, nu_b
-                ),
-            }
-        }
+        check_nu_ordering(&MAIN_NETWORK);
+        check_nu_ordering(&YCASH_MAIN_NETWORK);
     }
 
     #[test]
@@ -924,5 +996,95 @@ mod tests {
             BranchId::for_height(&MAIN_NETWORK, BlockHeight(5_000_000)),
             BranchId::Nu6_1,
         );
+    }
+
+    #[test]
+    fn ycash_branch_id_for_height() {
+        // Pre-Sapling on Ycash mainnet.
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(347_500)),
+            BranchId::Overwinter,
+        );
+        // Sapling epoch — active from 419_200 until the Ycash fork at 570_000.
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(419_200)),
+            BranchId::Sapling,
+        );
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(569_999)),
+            BranchId::Sapling,
+        );
+        // Ycash epoch — activation height 570_000 up to Blossom at 1_100_000.
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(570_000)),
+            BranchId::Ycash,
+        );
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(1_099_999)),
+            BranchId::Ycash,
+        );
+        // Post-fork Blossom / Heartwood / Canopy use Y-branch IDs (distinct from Zcash's
+        // for two-way replay protection across the chain split).
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(1_100_000)),
+            BranchId::YBlossom,
+        );
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(1_100_003)),
+            BranchId::YHeartwood,
+        );
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(1_100_006)),
+            BranchId::YCanopy,
+        );
+        // Well past Canopy; Ycash never activated NU5 so YCanopy stays in effect.
+        assert_eq!(
+            BranchId::for_height(&YCASH_MAIN_NETWORK, BlockHeight(5_000_000)),
+            BranchId::YCanopy,
+        );
+    }
+
+    #[test]
+    fn ycash_branch_id_u32_roundtrip() {
+        // The Y-variant consensus branch IDs must round-trip through their u32 wire
+        // representations. Values from hhanh00/librustzcash@ywallet.
+        for (bid, expected) in [
+            (BranchId::Ycash, 0x374d_694fu32),
+            (BranchId::YBlossom, 0x8e47_1bd6),
+            (BranchId::YHeartwood, 0x6631_4da3),
+            (BranchId::YCanopy, 0x19bd_2d2f),
+        ] {
+            let encoded: u32 = bid.into();
+            assert_eq!(encoded, expected);
+            assert_eq!(BranchId::try_from(encoded).unwrap(), bid);
+        }
+    }
+
+    #[test]
+    fn ycash_height_bounds() {
+        // On Ycash mainnet, Sapling's upper bound must be the Ycash activation (570_000),
+        // not Blossom's heights. This verifies the `height_bounds` rewrite correctly
+        // skips over upgrades that are not activated on this network.
+        let (lower, upper) = BranchId::Sapling
+            .height_bounds(&YCASH_MAIN_NETWORK)
+            .expect("Sapling is active on Ycash mainnet");
+        assert_eq!(lower, BlockHeight(419_200));
+        assert_eq!(upper, Some(BlockHeight(570_000)));
+
+        // The plain `Blossom` branch is never the active branch on Ycash (the network
+        // uses `YBlossom` instead). Its bounds should be None.
+        assert!(BranchId::Blossom
+            .height_bounds(&YCASH_MAIN_NETWORK)
+            .is_none());
+
+        // Conversely, `YBlossom` is not a branch on Zcash mainnet.
+        assert!(BranchId::YBlossom.height_bounds(&MAIN_NETWORK).is_none());
+
+        // `YCanopy` has an unbounded upper on Ycash because NU5 never activates.
+        let (lower, upper) = BranchId::YCanopy
+            .height_bounds(&YCASH_MAIN_NETWORK)
+            .expect("YCanopy is active on Ycash mainnet");
+        assert_eq!(lower, BlockHeight(1_100_006));
+        assert_eq!(upper, None);
     }
 }
