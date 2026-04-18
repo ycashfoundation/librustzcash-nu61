@@ -414,11 +414,17 @@ impl Account {
     }
 
     pub(crate) fn first_unreserved_index(&self) -> Result<u32, Error> {
-        self.first_unstored_index()?
+        // Ycash/WebZjs: accounts imported from a sapling-only UFVK (e.g., via
+        // the MetaMask snap which intentionally doesn't surface transparent
+        // keys) never have ephemeral transparent addresses reserved, so
+        // `first_unstored_index` is 0 and the subtraction underflows. That's
+        // not corruption — it's the valid "no ephemeral range yet" state.
+        // Reporting `CorruptedData` here blocks shielded-only spends that
+        // never need ephemeral addresses in the first place.
+        Ok(self
+            .first_unstored_index()?
             .checked_sub(EPHEMERAL_GAP_LIMIT)
-            .ok_or(Error::CorruptedData(
-                "ephemeral_addresses corrupted".to_owned(),
-            ))
+            .unwrap_or(0))
     }
 
     pub(crate) fn reserve_until(
