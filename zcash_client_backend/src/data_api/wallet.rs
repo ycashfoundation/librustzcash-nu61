@@ -1878,7 +1878,14 @@ where
 
     let created = Creator::build_from_parts(build_result.pczt_parts).ok_or(PcztError::Build)?;
 
-    let io_finalized = IoFinalizer::new(created).finalize_io()?;
+    // For Ycash v4 PCZTs, ZIP-243 sighash commits to Sapling Groth16 proof
+    // bytes, so the IoFinalizer — which signs dummy spends using the
+    // sighash — MUST run AFTER the Prover. Upstream calls IoFinalizer here
+    // unconditionally, which assumes v5 sighash (proof-independent). We
+    // defer IoFinalizer to the caller (see webzjs-wallet's pczt_prove),
+    // which runs it post-proving. The remaining Updater steps below only
+    // add metadata and work fine on a non-finalized PCZT.
+    let io_finalized = created;
 
     #[cfg(feature = "orchard")]
     let orchard_outputs = build_state
