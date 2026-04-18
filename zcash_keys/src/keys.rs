@@ -878,6 +878,35 @@ impl UnifiedFullViewingKey {
         )
     }
 
+    /// Construct a UFVK from a Sapling `ExtendedFullViewingKey` and a
+    /// transparent `AccountPubKey`, with no Orchard component.
+    ///
+    /// Ycash never activated Unified Addresses, so the ZIP-316 bech32
+    /// encoding round-trip is unavailable on Ycash networks. This
+    /// constructor is the Ycash-specific analogue of the full-UFVK
+    /// construction that happens inside `UnifiedSpendingKey::to_unified_full_viewing_key`:
+    /// it lets a caller who holds the two viewing-key halves (e.g. a dapp
+    /// receiving them out-of-band from a hardware wallet or snap) rebuild
+    /// the in-memory UFVK so that the wallet can derive both Sapling and
+    /// transparent addresses for the account.
+    #[cfg(all(
+        feature = "sapling",
+        feature = "transparent-inputs",
+        feature = "unstable"
+    ))]
+    pub fn from_sapling_and_transparent(
+        sapling: ExtendedFullViewingKey,
+        transparent: ::transparent::keys::AccountPubKey,
+    ) -> Result<UnifiedFullViewingKey, DerivationError> {
+        Self::from_checked_parts(
+            Some(transparent),
+            Some(sapling.to_diversifiable_full_viewing_key()),
+            #[cfg(feature = "orchard")]
+            None,
+            vec![],
+        )
+    }
+
     /// Construct a UFVK from its constituent parts, after verifying that UIVK derivation can
     /// succeed.
     fn from_checked_parts(
