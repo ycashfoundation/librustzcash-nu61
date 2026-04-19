@@ -31,7 +31,6 @@ pub mod circuit;
 mod hashreader;
 pub mod sprout;
 
-#[cfg(any(feature = "local-prover", feature = "bundled-prover"))]
 pub mod prover;
 
 #[cfg(feature = "download-params")]
