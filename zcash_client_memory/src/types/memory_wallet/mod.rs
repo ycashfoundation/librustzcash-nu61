@@ -1167,4 +1167,12 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
     pub fn get_block_time(&self, height: BlockHeight) -> Option<u32> {
         self.blocks.get(&height).map(|block| block.block_time)
     }
+
+    /// Returns a reference to the transparent-received-outputs table for
+    /// transaction history queries. Pairs with [`Self::received_notes`] and
+    /// [`Self::sent_notes`]; consumers that want a full picture of inbound
+    /// funds need to walk all three.
+    pub fn transparent_received_outputs(&self) -> &TransparentReceivedOutputs {
+        &self.transparent_received_outputs
+    }
 }

@@ -120,6 +120,21 @@ impl ReceivedTransparentOutput {
         }
     }
 
+    /// The txid of the transaction that created this output.
+    pub fn transaction_id(&self) -> TxId {
+        self.transaction_id
+    }
+
+    /// The account that owns this output.
+    pub fn account_id(&self) -> AccountId {
+        self.account_id
+    }
+
+    /// The value of this output in zatoshis.
+    pub fn value(&self) -> u64 {
+        self.txout.value().into_u64()
+    }
+
     pub fn to_wallet_transparent_output(
         &self,
         outpoint: &OutPoint,
