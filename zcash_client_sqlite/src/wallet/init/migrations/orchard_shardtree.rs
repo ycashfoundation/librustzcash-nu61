@@ -99,7 +99,15 @@ impl<P: consensus::Parameters> RusqliteMigration for Migration<P> {
                 )",
             16, // ORCHARD_SHARD_HEIGHT is only available when `feature = "orchard"` is enabled.
             16, // ORCHARD_SHARD_HEIGHT is only available when `feature = "orchard"` is enabled.
-            u32::from(self.params.activation_height(NetworkUpgrade::Nu5).unwrap()),
+            // Ycash forked pre-NU5 and never activated it, so `activation_height(Nu5)`
+            // returns `None`. The resulting view is dead code on Ycash (no Orchard
+            // notes can exist without Nu5), but the migration still needs a numeric
+            // constant to substitute. `u32::MAX` keeps `subtree_start_height` safely
+            // larger than any real block_range_end so joins produce empty results.
+            self.params
+                .activation_height(NetworkUpgrade::Nu5)
+                .map(u32::from)
+                .unwrap_or(u32::MAX),
         ))?;
 
         transaction.execute_batch(&format!(

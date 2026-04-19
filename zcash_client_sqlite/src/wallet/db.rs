@@ -1284,7 +1284,12 @@ pub(super) fn view_orchard_shard_scan_ranges<P: Parameters>(params: &P) -> Strin
                 shard.subtree_end_height IS NULL
             )
         )",
-        u32::from(params.activation_height(NetworkUpgrade::Nu5).unwrap()),
+        // See `orchard_shardtree` migration: Ycash has no Nu5, so fall back to
+        // `u32::MAX` which produces an empty view without requiring Orchard data.
+        params
+            .activation_height(NetworkUpgrade::Nu5)
+            .map(u32::from)
+            .unwrap_or(u32::MAX),
     )
 }
 
