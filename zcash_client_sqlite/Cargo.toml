@@ -74,7 +74,11 @@ incrementalmerkletree.workspace = true
 shardtree = { workspace = true, features = ["legacy-api"] }
 
 # - SQLite databases
-rusqlite = { workspace = true, features = ["time", "array", "uuid"] }
+# rusqlite is pulled in target-conditionally below: `bundled` (cc-compiled
+# libsqlite3) is incompatible with wasm32-unknown-unknown, so browser builds
+# rely on rusqlite's built-in sqlite-wasm-rs FFI backend instead. The
+# `bundled` feature here is moved from the workspace level so each consumer
+# opts in explicitly per target.
 schemerz.workspace = true
 schemerz-rusqlite.workspace = true
 time.workspace = true
@@ -168,6 +172,12 @@ expensive-tests = []
 ## A feature used to enable PCZT-specific tests without interfering with the
 ## protocol-specific flags. Test-only.
 pczt-tests = ["serde", "zcash_client_backend/pczt"]
+
+[target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+rusqlite = { workspace = true, features = ["bundled", "time", "array", "uuid"] }
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+rusqlite = { workspace = true, features = ["time", "array", "uuid"] }
 
 [lib]
 bench = false

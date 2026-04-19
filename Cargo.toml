@@ -147,7 +147,7 @@ subtle = { version = "2.2.3", default-features = false }
 # - Warning: One of the downstream consumers requires that SQLite be available through
 #   CocoaPods, due to being bound to React Native. We need to ensure that the SQLite
 #   version required for `rusqlite` is a version that is available through CocoaPods.
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37" }
 schemerz = "0.2"
 schemerz-rusqlite = "0.370"
 time = { version = "0.3.22", default-features = false }
@@ -198,6 +198,12 @@ pre-release-hook = ["cargo", "vet"]
 tag = false
 publish = false
 push = false
+
+[patch.crates-io]
+# Ycash fork of rusqlite 0.37.0 with PR 1769 cherry-picked to add
+# wasm32-unknown-unknown support via the sqlite-wasm-rs FFI backend.
+# Required for `zcash_client_sqlite` to compile for the browser.
+rusqlite = { path = "../rusqlite-ycash" }
 
 [profile.release]
 lto = true
