@@ -1994,13 +1994,19 @@ impl ProgressEstimator for SubtreeProgressEstimator {
         fully_scanned_height: Option<BlockHeight>,
         chain_tip_height: BlockHeight,
     ) -> Result<Option<Progress>, SqliteClientError> {
+        // Ycash never activated Nu5, so Orchard has no meaningful scan
+        // progress on that chain. Returning `None` here is consistent
+        // with the rest of the Orchard-gating pattern in this fork: the
+        // `orchard_shardtree` migration falls back to an empty view on
+        // the same condition.
+        let Some(nu5_activation) = params.activation_height(NetworkUpgrade::Nu5) else {
+            return Ok(None);
+        };
         subtree_scan_progress(
             conn,
             params,
             ShieldedProtocol::Orchard,
-            params
-                .activation_height(NetworkUpgrade::Nu5)
-                .expect("NU5 activation height must be available."),
+            nu5_activation,
             birthday_height,
             recover_until_height,
             fully_scanned_height,
