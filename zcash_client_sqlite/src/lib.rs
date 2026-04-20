@@ -405,6 +405,18 @@ impl<C, P, CL, R> WalletDb<C, P, CL, R> {
     pub fn params(&self) -> &P {
         &self.params
     }
+
+    /// Borrow the underlying connection handle.
+    ///
+    /// Exposed so downstream wallets can run ad-hoc SQL against the same
+    /// connection — in particular against the wallet views
+    /// (`v_transactions`, `v_tx_outputs`) that aren't surfaced through the
+    /// `WalletRead` trait. Callers must not use the borrowed connection to
+    /// mutate wallet state; that invariant is enforced by the caller, not by
+    /// this type.
+    pub fn conn(&self) -> &C {
+        &self.conn
+    }
 }
 
 impl<P, CL, R> WalletDb<Connection, P, CL, R> {
