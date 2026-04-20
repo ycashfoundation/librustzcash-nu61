@@ -206,10 +206,21 @@ pub(crate) mod private {
     }
 
     /// A Unified Container containing addresses or viewing keys.
+    ///
+    /// Ycash never activated NU5, so Unified Addresses / FVKs / IVKs are
+    /// not consensus-level concepts on Ycash. The `YCASH_MAIN` /
+    /// `YCASH_TEST` HRPs here exist purely so downstream wallets (e.g.
+    /// `zcash_client_sqlite`, which stores the bech32 `ufvk` text string
+    /// in its accounts table) can round-trip a Ycash UFVK through
+    /// string storage without panicking. These strings are never
+    /// broadcast, shared between nodes, or shown to users — they're an
+    /// internal DB representation.
     pub trait SealedContainer: super::Container + core::marker::Sized {
         const MAINNET: &'static str;
         const TESTNET: &'static str;
         const REGTEST: &'static str;
+        const YCASH_MAIN: &'static str;
+        const YCASH_TEST: &'static str;
 
         /// Implementations of this method should act as unchecked constructors
         /// of the container type; the caller is guaranteed to check the
@@ -221,9 +232,8 @@ pub(crate) mod private {
                 NetworkType::Main => Self::MAINNET,
                 NetworkType::Test => Self::TESTNET,
                 NetworkType::Regtest => Self::REGTEST,
-                NetworkType::YcashMain | NetworkType::YcashTest => {
-                    panic!("Ycash does not support Unified Addresses, FVKs, or IVKs")
-                }
+                NetworkType::YcashMain => Self::YCASH_MAIN,
+                NetworkType::YcashTest => Self::YCASH_TEST,
             }
         }
 
@@ -234,6 +244,10 @@ pub(crate) mod private {
                 Some(NetworkType::Test)
             } else if hrp == Self::REGTEST {
                 Some(NetworkType::Regtest)
+            } else if hrp == Self::YCASH_MAIN {
+                Some(NetworkType::YcashMain)
+            } else if hrp == Self::YCASH_TEST {
+                Some(NetworkType::YcashTest)
             } else {
                 None
             }

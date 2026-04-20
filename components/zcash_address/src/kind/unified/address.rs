@@ -152,6 +152,14 @@ impl super::private::SealedContainer for Address {
     /// The HRP for a Bech32m-encoded regtest Unified Address.
     const REGTEST: &'static str = constants::regtest::HRP_UNIFIED_ADDRESS;
 
+    /// Ycash mainnet HRP — used only so downstream wallets can round-trip
+    /// a UA through their own string storage; Ycash never activated
+    /// Unified encoding at consensus.
+    const YCASH_MAIN: &'static str = constants::ycash_mainnet::HRP_UNIFIED_ADDRESS;
+
+    /// Ycash testnet HRP — same rationale as `YCASH_MAIN`.
+    const YCASH_TEST: &'static str = constants::ycash_testnet::HRP_UNIFIED_ADDRESS;
+
     fn from_inner(receivers: Vec<Self::Item>) -> Self {
         Self(receivers)
     }
