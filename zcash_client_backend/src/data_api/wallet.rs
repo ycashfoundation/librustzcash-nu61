@@ -1059,6 +1059,31 @@ struct BuildState<'a, P, AccountId> {
     utxos_spent: Vec<OutPoint>,
 }
 
+/// Caller-supplied entropy used by [`build_proposed_transaction`] when an
+/// external signer (e.g. a hardware wallet running its own copy of the
+/// spend-auth randomization) must commit to the same per-spend `alpha`
+/// and per-output `rseed` that the host-built bundle embeds. Buffers
+/// are consumed in add-order: the first sapling spend the proposal
+/// produces uses `spend_alphas[0]`, the second uses `spend_alphas[1]`,
+/// and so on. Likewise for outputs across payments + change.
+///
+/// Bundle order is randomized inside the Sapling builder during
+/// `build_for_pczt`; use `SaplingMetadata::spend_index` /
+/// `output_index` returned by the build to map add-order back to
+/// bundle-order if you need to drive an external signer in bundle
+/// order.
+#[cfg(feature = "pczt")]
+#[derive(Debug, Clone)]
+pub struct LedgerEntropy {
+    /// 64 bytes per sapling spend, in proposal add-order. Each is
+    /// wide-reduced via `jubjub::Fr::random` to derive the spend's
+    /// `alpha`.
+    pub spend_alphas: Vec<[u8; 64]>,
+    /// 32 bytes per sapling output (payments + change), in
+    /// proposal add-order. Used as the ZIP-212 AfterZip212 rseed.
+    pub output_rseeds: Vec<[u8; 32]>,
+}
+
 // `unused_transparent_outputs` maps `StepOutput`s for transparent outputs
 // that have not been consumed so far, to the corresponding pair of
 // `TransparentAddress` and `Outpoint`.
@@ -1077,6 +1102,11 @@ fn build_proposed_transaction<DbT, ParamsT, InputsErrT, FeeRuleT, ChangeErrT, N>
         StepOutput,
         (TransparentAddress, OutPoint),
     >,
+    // ledger_entropy: when `Some`, every sapling spend / output is added
+    // via the builder's external-signer variant using entropy popped from
+    // these buffers in add-order. `None` keeps the upstream behavior
+    // (random alpha / rseed per spend / output).
+    #[cfg(feature = "pczt")] ledger_entropy: Option<&LedgerEntropy>,
 ) -> Result<
     BuildState<'static, ParamsT, DbT::AccountId>,
     CreateErrT<DbT, InputsErrT, FeeRuleT, ChangeErrT, N>,
@@ -1242,17 +1272,46 @@ where
     })
     .ok_or(Error::ProposalNotSupported)?;
 
+    // add-order counter for sapling spends; consumed only when
+    // ledger_entropy is `Some`. Tracks the next slot in
+    // `ledger_entropy.spend_alphas`.
+    #[cfg(feature = "pczt")]
+    let mut next_spend_alpha_idx: usize = 0;
     for (_sapling_key_scope, sapling_note, merkle_path) in sapling_inputs.into_iter() {
         let key = match _sapling_key_scope {
             Scope::External => ufvk.sapling().map(|k| k.fvk().clone()),
             Scope::Internal => ufvk.sapling().map(|k| k.to_internal_fvk()),
-        };
+        }
+        .ok_or(Error::KeyNotAvailable(PoolType::SAPLING))?;
 
-        builder.add_sapling_spend(
-            key.ok_or(Error::KeyNotAvailable(PoolType::SAPLING))?,
-            sapling_note.clone(),
-            merkle_path,
-        )?;
+        #[cfg(feature = "pczt")]
+        match ledger_entropy {
+            Some(le) => {
+                let alpha = *le.spend_alphas.get(next_spend_alpha_idx).ok_or(
+                    Error::LedgerEntropyExhausted {
+                        kind: "spend-alpha",
+                        wanted: next_spend_alpha_idx + 1,
+                        had: le.spend_alphas.len(),
+                    },
+                )?;
+                next_spend_alpha_idx += 1;
+                builder.add_sapling_spend_with_external_signer_alpha::<FeeRuleT::Error>(
+                    key,
+                    sapling_note.clone(),
+                    merkle_path,
+                    alpha,
+                )?;
+            }
+            None => {
+                builder.add_sapling_spend::<FeeRuleT::Error>(
+                    key,
+                    sapling_note.clone(),
+                    merkle_path,
+                )?;
+            }
+        }
+        #[cfg(not(feature = "pczt"))]
+        builder.add_sapling_spend::<FeeRuleT::Error>(key, sapling_note.clone(), merkle_path)?;
     }
 
     #[cfg(feature = "orchard")]
@@ -1385,6 +1444,11 @@ where
         StepOutputIndex,
     )> = vec![];
 
+    // add-order counter for sapling outputs (payments + change),
+    // consumed only when ledger_entropy is `Some`.
+    #[cfg(feature = "pczt")]
+    let mut next_output_rseed_idx: usize = 0;
+
     for (&payment_index, output_pool) in proposal_step.payment_pools() {
         let payment = proposal_step
             .transaction_request()
@@ -1401,10 +1465,40 @@ where
         let add_sapling_output =
             |builder: &mut Builder<_, _>,
              sapling_output_meta: &mut Vec<_>,
-             to: sapling::PaymentAddress|
+             to: sapling::PaymentAddress,
+             #[cfg(feature = "pczt")] next_rseed_idx: &mut usize|
              -> Result<(), CreateErrT<DbT, InputsErrT, FeeRuleT, ChangeErrT, N>> {
                 let memo = payment.memo().map_or_else(MemoBytes::empty, |m| m.clone());
-                builder.add_sapling_output(
+                #[cfg(feature = "pczt")]
+                match ledger_entropy {
+                    Some(le) => {
+                        let rseed = *le.output_rseeds.get(*next_rseed_idx).ok_or(
+                            Error::LedgerEntropyExhausted {
+                                kind: "output-rseed",
+                                wanted: *next_rseed_idx + 1,
+                                had: le.output_rseeds.len(),
+                            },
+                        )?;
+                        *next_rseed_idx += 1;
+                        builder.add_sapling_output_with_external_signer_rseed::<FeeRuleT::Error>(
+                            external_ovk.map(|k| k.into()),
+                            to,
+                            payment_amount,
+                            memo.clone(),
+                            rseed,
+                        )?;
+                    }
+                    None => {
+                        builder.add_sapling_output::<FeeRuleT::Error>(
+                            external_ovk.map(|k| k.into()),
+                            to,
+                            payment_amount,
+                            memo.clone(),
+                        )?;
+                    }
+                }
+                #[cfg(not(feature = "pczt"))]
+                builder.add_sapling_output::<FeeRuleT::Error>(
                     external_ovk.map(|k| k.into()),
                     to,
                     payment_amount,
@@ -1482,7 +1576,13 @@ where
                 }
                 PoolType::Shielded(ShieldedProtocol::Sapling) => {
                     let to = *ua.sapling().expect("The mapping between payment pool and receiver is checked in step construction");
-                    add_sapling_output(&mut builder, &mut sapling_output_meta, to)?;
+                    add_sapling_output(
+                        &mut builder,
+                        &mut sapling_output_meta,
+                        to,
+                        #[cfg(feature = "pczt")]
+                        &mut next_output_rseed_idx,
+                    )?;
                 }
                 PoolType::Transparent => {
                     let to = *ua.transparent().expect("The mapping between payment pool and receiver is checked in step construction");
@@ -1490,7 +1590,13 @@ where
                 }
             },
             Address::Sapling(to) => {
-                add_sapling_output(&mut builder, &mut sapling_output_meta, to)?;
+                add_sapling_output(
+                    &mut builder,
+                    &mut sapling_output_meta,
+                    to,
+                    #[cfg(feature = "pczt")]
+                    &mut next_output_rseed_idx,
+                )?;
             }
             Address::Transparent(to) => {
                 add_transparent_output(&mut builder, &mut transparent_output_meta, to)?;
@@ -1517,12 +1623,68 @@ where
         let output_pool = change_value.output_pool();
         match output_pool {
             PoolType::Shielded(ShieldedProtocol::Sapling) => {
-                builder.add_sapling_output(
-                    internal_ovk.map(|k| k.into()),
-                    ufvk.sapling()
-                        .ok_or(Error::KeyNotAvailable(PoolType::SAPLING))?
-                        .change_address()
-                        .1,
+                // External-signer accounts (Ledger): the device firmware
+                // only holds external-scope keys (`ak || nk || ovk ||
+                // dk` from GET_FVK; no internal-scope ZIP-32
+                // derivation). Sending change to the standard
+                // internal-scope `change_address()` would lock those
+                // funds to keys the device cannot derive, so the change
+                // note would be unspendable. Route the change back to
+                // the external default address (same one the device
+                // shows under Get Address) instead, and use the
+                // external OVK so the sender can still decrypt and
+                // scan the outgoing memo. Cost: change notes show up
+                // as "self-receive" in the wallet UI rather than as
+                // change, but funds remain spendable.
+                #[cfg(feature = "pczt")]
+                let force_external_change = ledger_entropy.is_some();
+                #[cfg(not(feature = "pczt"))]
+                let force_external_change = false;
+                let dfvk = ufvk
+                    .sapling()
+                    .ok_or(Error::KeyNotAvailable(PoolType::SAPLING))?;
+                let change_to = if force_external_change {
+                    dfvk.default_address().1
+                } else {
+                    dfvk.change_address().1
+                };
+                let change_ovk = if force_external_change {
+                    external_ovk
+                } else {
+                    internal_ovk
+                };
+                #[cfg(feature = "pczt")]
+                match ledger_entropy {
+                    Some(le) => {
+                        let rseed = *le.output_rseeds.get(next_output_rseed_idx).ok_or(
+                            Error::LedgerEntropyExhausted {
+                                kind: "output-rseed",
+                                wanted: next_output_rseed_idx + 1,
+                                had: le.output_rseeds.len(),
+                            },
+                        )?;
+                        next_output_rseed_idx += 1;
+                        builder.add_sapling_output_with_external_signer_rseed::<FeeRuleT::Error>(
+                            change_ovk.map(|k| k.into()),
+                            change_to,
+                            change_value.value(),
+                            memo.clone(),
+                            rseed,
+                        )?;
+                    }
+                    None => {
+                        builder.add_sapling_output::<FeeRuleT::Error>(
+                            change_ovk.map(|k| k.into()),
+                            change_to,
+                            change_value.value(),
+                            memo.clone(),
+                        )?;
+                    }
+                }
+                #[cfg(not(feature = "pczt"))]
+                builder.add_sapling_output::<FeeRuleT::Error>(
+                    change_ovk.map(|k| k.into()),
+                    change_to,
                     change_value.value(),
                     memo.clone(),
                 )?;
@@ -1661,6 +1823,8 @@ where
         proposal_step,
         #[cfg(feature = "transparent-inputs")]
         unused_transparent_outputs,
+        #[cfg(feature = "pczt")]
+        None,
     )?;
 
     // Build the transaction with the specified fee rule
@@ -1811,6 +1975,23 @@ where
     })
 }
 
+/// PCZT spend/output entropy in **bundle order** (post-shuffle). Sent
+/// back from [`create_pczt_from_proposal_for_ledger`] alongside the
+/// unsigned PCZT so the caller can drive a hardware wallet's
+/// SIGN_SAPLING (which needs the per-spend 64-byte alpha) and feed it
+/// the same per-output rseed bytes the bundle embedded.
+#[cfg(feature = "pczt")]
+#[derive(Debug, Clone)]
+pub struct LedgerPcztOutputs {
+    /// Per-Sapling-spend 64-byte alpha, in bundle order (the order
+    /// `pczt.sapling.spends` appears in).
+    pub spend_alphas_bundle_order: Vec<[u8; 64]>,
+    /// Per-Sapling-output 32-byte rseed, in bundle order (the order
+    /// `pczt.sapling.outputs` appears in). Includes both payment
+    /// outputs and change outputs.
+    pub output_rseeds_bundle_order: Vec<[u8; 32]>,
+}
+
 /// Constructs a transaction using the inputs supplied by the given proposal.
 ///
 /// Only single-step proposals are currently supported.
@@ -1835,6 +2016,70 @@ pub fn create_pczt_from_proposal<DbT, ParamsT, InputsErrT, FeeRuleT, ChangeErrT,
     ovk_policy: OvkPolicy,
     proposal: &Proposal<FeeRuleT, N>,
 ) -> Result<pczt::Pczt, CreateErrT<DbT, InputsErrT, FeeRuleT, ChangeErrT, N>>
+where
+    DbT: WalletWrite + WalletCommitmentTrees,
+    ParamsT: consensus::Parameters + Clone,
+    FeeRuleT: FeeRule,
+    DbT::AccountId: serde::Serialize,
+{
+    create_pczt_from_proposal_inner(wallet_db, params, account_id, ovk_policy, proposal, None)
+        .map(|(pczt, _)| pczt)
+}
+
+/// Same as [`create_pczt_from_proposal`] but builds the Sapling bundle
+/// using caller-supplied per-spend `alpha` and per-output `rseed` so an
+/// external signer (e.g. a Ledger device that wide-reduces the same 64
+/// bytes itself, and computes `cmu` from the same rseed) ends up
+/// agreeing with the bundle. Returns the bundle-order entropy alongside
+/// the unsigned PCZT so the caller can pass each spend's alpha to
+/// SIGN_SAPLING in bundle order.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
+#[cfg(feature = "pczt")]
+pub fn create_pczt_from_proposal_for_ledger<DbT, ParamsT, InputsErrT, FeeRuleT, ChangeErrT, N>(
+    wallet_db: &mut DbT,
+    params: &ParamsT,
+    account_id: <DbT as WalletRead>::AccountId,
+    ovk_policy: OvkPolicy,
+    proposal: &Proposal<FeeRuleT, N>,
+    ledger_entropy: &LedgerEntropy,
+) -> Result<(pczt::Pczt, LedgerPcztOutputs), CreateErrT<DbT, InputsErrT, FeeRuleT, ChangeErrT, N>>
+where
+    DbT: WalletWrite + WalletCommitmentTrees,
+    ParamsT: consensus::Parameters + Clone,
+    FeeRuleT: FeeRule,
+    DbT::AccountId: serde::Serialize,
+{
+    let (pczt, outputs) = create_pczt_from_proposal_inner(
+        wallet_db,
+        params,
+        account_id,
+        ovk_policy,
+        proposal,
+        Some(ledger_entropy),
+    )?;
+    // outputs is always `Some` when we pass `Some(ledger_entropy)` —
+    // unwrap is justified by that invariant.
+    let outputs = outputs.expect(
+        "create_pczt_from_proposal_inner must return Some(LedgerPcztOutputs) when given Some(ledger_entropy)",
+    );
+    Ok((pczt, outputs))
+}
+
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
+#[cfg(feature = "pczt")]
+fn create_pczt_from_proposal_inner<DbT, ParamsT, InputsErrT, FeeRuleT, ChangeErrT, N>(
+    wallet_db: &mut DbT,
+    params: &ParamsT,
+    account_id: <DbT as WalletRead>::AccountId,
+    ovk_policy: OvkPolicy,
+    proposal: &Proposal<FeeRuleT, N>,
+    ledger_entropy: Option<&LedgerEntropy>,
+) -> Result<
+    (pczt::Pczt, Option<LedgerPcztOutputs>),
+    CreateErrT<DbT, InputsErrT, FeeRuleT, ChangeErrT, N>,
+>
 where
     DbT: WalletWrite + WalletCommitmentTrees,
     ParamsT: consensus::Parameters + Clone,
@@ -1871,10 +2116,43 @@ where
         proposal_step,
         #[cfg(feature = "transparent-inputs")]
         unused_transparent_outputs,
+        #[cfg(feature = "pczt")]
+        ledger_entropy,
     )?;
 
     // Build the transaction with the specified fee rule
     let build_result = build_state.builder.build_for_pczt(OsRng, fee_rule)?;
+
+    // If the caller provided LedgerEntropy in add-order, the sapling
+    // builder shuffled spends and outputs during `build_for_pczt`.
+    // Reorder the entropy into the bundle's post-shuffle order so the
+    // caller can drive an external signer that walks the bundle's
+    // spends in serialization order.
+    #[cfg(feature = "pczt")]
+    let ledger_outputs = ledger_entropy.map(|le| {
+        let n_spends = le.spend_alphas.len();
+        let mut spend_alphas_bundle_order = vec![[0u8; 64]; n_spends];
+        for (add_order, alpha) in le.spend_alphas.iter().enumerate() {
+            let bundle_idx = build_result
+                .sapling_meta
+                .spend_index(add_order)
+                .expect("sapling_meta::spend_index must be populated for every add-order spend");
+            spend_alphas_bundle_order[bundle_idx] = *alpha;
+        }
+        let n_outputs = le.output_rseeds.len();
+        let mut output_rseeds_bundle_order = vec![[0u8; 32]; n_outputs];
+        for (add_order, rseed) in le.output_rseeds.iter().enumerate() {
+            let bundle_idx = build_result
+                .sapling_meta
+                .output_index(add_order)
+                .expect("sapling_meta::output_index must be populated for every add-order output");
+            output_rseeds_bundle_order[bundle_idx] = *rseed;
+        }
+        LedgerPcztOutputs {
+            spend_alphas_bundle_order,
+            output_rseeds_bundle_order,
+        }
+    });
 
     let created = Creator::build_from_parts(build_result.pczt_parts).ok_or(PcztError::Build)?;
 
@@ -2118,7 +2396,7 @@ where
         })?
         .finish();
 
-    Ok(pczt)
+    Ok((pczt, ledger_outputs))
 }
 
 /// Finalizes the given PCZT, and persists the transaction to the wallet database.

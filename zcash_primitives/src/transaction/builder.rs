@@ -551,6 +551,55 @@ impl<P: consensus::Parameters, U> Builder<'_, P, U> {
             .map_err(Error::SaplingBuild)
     }
 
+    /// Adds a Sapling note to be spent in this transaction, binding the
+    /// spend-auth randomizer `alpha` to 64 bytes of caller-supplied
+    /// entropy. Companion to [`Self::add_sapling_spend`] for the
+    /// external-signer flow (e.g. Ledger): the same 64 bytes are
+    /// wide-reduced on the device's side via the redjubjub
+    /// `SpendAuth` randomization, and the resulting `rk` baked into the
+    /// bundle here must agree with what the device signs against.
+    pub fn add_sapling_spend_with_external_signer_alpha<FE>(
+        &mut self,
+        fvk: sapling::keys::FullViewingKey,
+        note: Note,
+        merkle_path: sapling::MerklePath,
+        alpha_64b: [u8; 64],
+    ) -> Result<(), Error<FE>> {
+        if let Some(builder) = self.sapling_builder.as_mut() {
+            builder.add_spend_with_external_signer_alpha(fvk, note, merkle_path, alpha_64b)?;
+            Ok(())
+        } else {
+            Err(Error::SaplingBuilderNotAvailable)
+        }
+    }
+
+    /// Adds a Sapling output whose ZIP-212 rseed is the supplied
+    /// 32-byte value rather than freshly random. Companion to
+    /// [`Self::add_sapling_output`] for the external-signer flow:
+    /// the same rseed is fed to the device so the `cmu` it computes
+    /// from `(diversifier, pk_d, value, rseed)` matches the `cmu`
+    /// embedded in the bundle's `OutputDescription`.
+    pub fn add_sapling_output_with_external_signer_rseed<FE>(
+        &mut self,
+        ovk: Option<sapling::keys::OutgoingViewingKey>,
+        to: PaymentAddress,
+        value: Zatoshis,
+        memo: MemoBytes,
+        rseed_32: [u8; 32],
+    ) -> Result<(), Error<FE>> {
+        self.sapling_builder
+            .as_mut()
+            .ok_or(Error::SaplingBuilderNotAvailable)?
+            .add_output_with_external_signer_rseed(
+                ovk,
+                to,
+                sapling::value::NoteValue::from_raw(u64::from(value)),
+                memo.into_bytes(),
+                rseed_32,
+            )
+            .map_err(Error::SaplingBuild)
+    }
+
     /// Adds a transparent coin to be spent in this transaction.
     #[cfg(feature = "transparent-inputs")]
     pub fn add_transparent_input(&mut self, input: TransparentInputInfo) {

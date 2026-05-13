@@ -104,6 +104,18 @@ pub enum Error<DataSourceError, CommitmentTreeError, SelectionError, FeeError, C
     /// An error occurred while working with PCZTs.
     #[cfg(feature = "pczt")]
     Pczt(PcztError),
+
+    /// The caller of a Ledger-flavored PCZT build supplied too few
+    /// per-spend or per-output entropy buffers for the number of
+    /// shielded inputs/outputs the proposal actually produced. The
+    /// caller should pre-generate enough entropy by inspecting the
+    /// proposal — see [`crate::data_api::wallet::create_pczt_from_proposal_for_ledger`].
+    #[cfg(feature = "pczt")]
+    LedgerEntropyExhausted {
+        kind: &'static str,
+        wanted: usize,
+        had: usize,
+    },
 }
 
 /// Errors that can occur while working with PCZTs.
@@ -254,6 +266,11 @@ where
             }
             #[cfg(feature = "pczt")]
             Error::Pczt(e) => write!(f, "PCZT error: {e}"),
+            #[cfg(feature = "pczt")]
+            Error::LedgerEntropyExhausted { kind, wanted, had } => write!(
+                f,
+                "Ledger entropy exhausted: proposal needs {wanted} {kind} entropy buffer(s), caller supplied {had}"
+            ),
         }
     }
 }
