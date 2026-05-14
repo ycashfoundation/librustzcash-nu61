@@ -1223,14 +1223,23 @@ pub(crate) fn get_transparent_balances<P: consensus::Parameters>(
         let taddr = TransparentAddress::decode(params, &taddr_str)?;
         let value = Zatoshis::from_nonnegative_i64(row.get("value_zat")?)?;
         let key_scope_code: i64 = row.get("key_scope")?;
-        let key_scope = KeyScope::decode(key_scope_code)?
-            .as_transparent()
-            .ok_or_else(|| {
+        let decoded = KeyScope::decode(key_scope_code)?;
+        // Foreign scope is the legitimate label for an imported
+        // standalone transparent pubkey (Ledger and zcashd-import
+        // flows). It has no ZIP-32 derivation, so `.as_transparent()`
+        // returns None — but the wallet still owns the funds, so we
+        // surface it as External for accounting (receive-only address
+        // logically equivalent to a published `External` receiver).
+        // Drop the previous "CorruptedData" misclassification.
+        let key_scope = match decoded {
+            KeyScope::Foreign => TransparentKeyScope::EXTERNAL,
+            other => other.as_transparent().ok_or_else(|| {
                 SqliteClientError::CorruptedData(format!(
                     "Invalid key scope code for transparent received output: {}",
                     key_scope_code
                 ))
-            })?;
+            })?,
+        };
 
         let entry = result.entry(taddr).or_insert((key_scope, Balance::ZERO));
         if value < zip317::MARGINAL_FEE {
@@ -1282,14 +1291,20 @@ pub(crate) fn get_transparent_balances<P: consensus::Parameters>(
             let taddr = TransparentAddress::decode(params, &taddr_str)?;
             let value = Zatoshis::from_nonnegative_i64(row.get("value_zat")?)?;
             let key_scope_code: i64 = row.get("key_scope")?;
-            let key_scope = KeyScope::decode(key_scope_code)?
-                .as_transparent()
-                .ok_or_else(|| {
+            let decoded = KeyScope::decode(key_scope_code)?;
+            // See the matching note in the spendable-balance loop
+            // above: Foreign-scope rows belong to imported standalone
+            // pubkeys (Ledger / zcashd-import paths) and are surfaced
+            // as External for balance accounting.
+            let key_scope = match decoded {
+                KeyScope::Foreign => TransparentKeyScope::EXTERNAL,
+                other => other.as_transparent().ok_or_else(|| {
                     SqliteClientError::CorruptedData(format!(
                         "Invalid key scope code for transparent received output: {}",
                         key_scope_code
                     ))
-                })?;
+                })?,
+            };
 
             let entry = result.entry(taddr).or_insert((key_scope, Balance::ZERO));
             if value < zip317::MARGINAL_FEE {
