@@ -507,28 +507,51 @@ impl TransparentBuilder {
         let inputs = self
             .inputs
             .into_iter()
-            .map(|i| pczt::Input {
-                prevout_txid: i.utxo.hash,
-                prevout_index: i.utxo.n,
-                sequence: None,
-                required_time_lock_time: None,
-                required_height_lock_time: None,
-                script_sig: None,
-                value: i.coin.value(),
-                script_pubkey: script::FromChain::parse(&i.coin.script_pubkey().0)
-                    .expect("checked by builder when input was added"),
-                redeem_script: match i.spend_info {
-                    SpendInfo::P2pkh { .. } => None,
-                    SpendInfo::P2sh { redeem_script } => Some(redeem_script),
-                },
-                partial_signatures: BTreeMap::new(),
-                sighash_type: SighashType::ALL,
-                bip32_derivation: BTreeMap::new(),
-                ripemd160_preimages: BTreeMap::new(),
-                sha256_preimages: BTreeMap::new(),
-                hash160_preimages: BTreeMap::new(),
-                hash256_preimages: BTreeMap::new(),
-                proprietary: BTreeMap::new(),
+            .map(|i| {
+                // For P2PKH inputs, populate `hash160_preimages` with
+                // `HASH160(pubkey) -> pubkey_bytes`. Downstream
+                // `Signer::append_transparent_signature` (the
+                // external-signer flow, e.g. Ledger) needs this map
+                // to recover the pubkey for sig verification against
+                // the input's script_pubkey hash. The internal Signer
+                // `sign_transparent` path doesn't need it because it
+                // already has the SecretKey and derives the pubkey
+                // directly, so this never used to matter — but for
+                // external signers the absence is a hard failure
+                // (`SignerError::MissingPreimage`).
+                use ripemd::Ripemd160;
+                use sha2::{Digest, Sha256};
+                let mut hash160_preimages = BTreeMap::new();
+                let redeem_script = match &i.spend_info {
+                    SpendInfo::P2pkh { pubkey } => {
+                        let pubkey_bytes = pubkey.serialize();
+                        let hash160: [u8; 20] =
+                            Ripemd160::digest(Sha256::digest(pubkey_bytes)).into();
+                        hash160_preimages.insert(hash160, pubkey_bytes.to_vec());
+                        None
+                    }
+                    SpendInfo::P2sh { redeem_script } => Some(redeem_script.clone()),
+                };
+                pczt::Input {
+                    prevout_txid: i.utxo.hash,
+                    prevout_index: i.utxo.n,
+                    sequence: None,
+                    required_time_lock_time: None,
+                    required_height_lock_time: None,
+                    script_sig: None,
+                    value: i.coin.value(),
+                    script_pubkey: script::FromChain::parse(&i.coin.script_pubkey().0)
+                        .expect("checked by builder when input was added"),
+                    redeem_script,
+                    partial_signatures: BTreeMap::new(),
+                    sighash_type: SighashType::ALL,
+                    bip32_derivation: BTreeMap::new(),
+                    ripemd160_preimages: BTreeMap::new(),
+                    sha256_preimages: BTreeMap::new(),
+                    hash160_preimages,
+                    hash256_preimages: BTreeMap::new(),
+                    proprietary: BTreeMap::new(),
+                }
             })
             .collect::<Vec<_>>();
 
